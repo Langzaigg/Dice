@@ -120,6 +120,7 @@ set<long long> DisabledHELPGroup;
 set<long long> DisabledHELPDiscuss;
 set<long long> DisabledOBGroup;
 set<long long> DisabledOBDiscuss;
+map<long long, RP> JRRP;
 unique_ptr<Initlist> ilInitList;
 
 struct SourceType
@@ -1000,9 +1001,10 @@ namespace Dice
 			}
 			if (!boolDetail && intTurnCnt != 1)
 			{
-				string strAns = strNickName + "骰出了: " + to_string(intTurnCnt) + "次" + rdMainDice.strDice + ": { ";
+				string strAns = "投掷了: " + to_string(intTurnCnt) + "次" + rdMainDice.strDice + ": { ";
 				if (!strReason.empty())
-					strAns.insert(0, "由于" + strReason + " ");
+					strAns.insert(0, "使用" + strReason + "，");
+				strAns.insert(0, strNickName);
 				vector<int> vintExVal;
 				while (intTurnCnt--)
 				{
@@ -1062,16 +1064,23 @@ namespace Dice
 			}
 			else
 			{
-				while (intTurnCnt--)
+				if (intTurnCnt)
 				{
 					// 此处返回值无用
 					// ReSharper disable once CppExpressionWithoutSideEffects
-					rdMainDice.Roll();
-					string strAns = strNickName + "骰出了: " + (boolDetail
-						? rdMainDice.FormCompleteString()
-						: rdMainDice.FormShortString());
+					string strAns = "骰出了: ";
+					while (intTurnCnt--)
+					{
+						rdMainDice.Roll();
+						strAns += (boolDetail
+							? rdMainDice.FormCompleteString()
+							: rdMainDice.FormShortString());
+						if (intTurnCnt)
+							strAns += ", ";
+					}
 					if (!strReason.empty())
-						strAns.insert(0, "由于" + strReason + " ");
+						strAns.insert(0, "使用" + strReason + "，");
+					strAns.insert(0, strNickName);
 					if (!isHidden)
 					{
 						dice_msg.Reply(strAns);
@@ -1570,19 +1579,42 @@ namespace Dice
 				dice_msg.Reply(GlobalMsg["strJrrpCommandDisabledErr"]);
 				return;
 			}
-			string des;
-			string data = "QQ=" + to_string(CQ::getLoginQQ()) + "&v=20190114" + "&QueryQQ=" + to_string(dice_msg.qq_id);
-			char* frmdata = new char[data.length() + 1];
-			strcpy_s(frmdata, data.length() + 1, data.c_str());
-			bool res = Network::POST("api.kokona.tech", "/jrrp", 5555, frmdata, des);
-			delete[] frmdata;
-			if (res)
+			char cstrDate[100] = {};
+			time_t time_tTime = 0;
+			time(&time_tTime);
+			tm tmTime{};
+			localtime_s(&tmTime, &time_tTime);
+			strftime(cstrDate, 100, "%F", &tmTime);
+			if (JRRP.count(dice_msg.qq_id) && JRRP[dice_msg.qq_id].Date == cstrDate)
 			{
-				dice_msg.Reply(format(GlobalMsg["strJrrp"], { strNickName, des }));
+				string strReply = strNickName + "今天的人品值是:" + to_string(JRRP[dice_msg.qq_id].RPVal);
+				if (JRRP[dice_msg.qq_id].RPVal > 60)
+					strReply += "！ (￣▽￣)";
+				else if (JRRP[dice_msg.qq_id].RPVal < 40)
+					strReply += "！Σ( ° △ °|||)";
+				else
+					strReply += "！ =￣ω￣=";
+				dice_msg.Reply(strReply);
 			}
 			else
 			{
-				dice_msg.Reply(format(GlobalMsg["strJrrpErr"], { des }));
+				normal_distribution<double> NormalDistribution(60, 15);
+				mt19937 Generator(static_cast<unsigned int>(RandomGenerator::GetCycleCount()));
+				int JRRPRes;
+				do
+				{
+					JRRPRes = static_cast<int>(NormalDistribution(Generator));
+				} while (JRRPRes <= 0 || JRRPRes > 100);
+				JRRP[dice_msg.qq_id].Date = cstrDate;
+				JRRP[dice_msg.qq_id].RPVal = JRRPRes;
+				string strReply(strNickName + "今天的人品值是:" + to_string(JRRP[dice_msg.qq_id].RPVal));
+				if (JRRP[dice_msg.qq_id].RPVal > 60)
+					strReply += "！ (￣▽￣)";
+				else if (JRRP[dice_msg.qq_id].RPVal < 40)
+					strReply += "！Σ( ° △ °|||)";
+				else
+					strReply += "！ =￣ω￣=";
+				dice_msg.Reply(strReply);
 			}
 		}
 		else if (strLowerMessage.substr(intMsgCnt, 4) == "name")
@@ -1953,7 +1985,7 @@ namespace Dice
 				intSkillVal = stoi(strSkillVal);
 			}
 			const int intD100Res = RandomGenerator::Randint(1, 100);
-			string strReply = strNickName + "进行" + strSkillName + "检定: D100=" + to_string(intD100Res) + "/" +
+			string strReply = "进行" + strSkillName + "检定: D100=" + to_string(intD100Res) + "/" +
 				to_string(intSkillVal) + " ";
 			if (intD100Res <= 5 && intD100Res <= intSkillVal)strReply += GlobalMsg["strCriticalSuccess"];
 			else if (intD100Res > 95)strReply += GlobalMsg["strFumble"];
@@ -1964,8 +1996,9 @@ namespace Dice
 			
 			if (!strReason.empty())
 			{
-				strReply = "由于" + strReason + " " + strReply;
+				strReply = "对" + strReason + strReply;
 			}
+			strReply = strNickName + strReply;
 			dice_msg.Reply(strReply);
 		}
 		else if (strLowerMessage.substr(intMsgCnt, 2) == "rc")
@@ -2022,7 +2055,7 @@ namespace Dice
 				intSkillVal = stoi(strSkillVal);
 			}
 			const int intD100Res = RandomGenerator::Randint(1, 100);
-			string strReply = strNickName + "进行" + strSkillName + "检定: D100=" + to_string(intD100Res) + "/" +
+			string strReply = "进行" + strSkillName + "检定: D100=" + to_string(intD100Res) + "/" +
 				to_string(intSkillVal) + " ";
 			if (intSkillVal != 0 && intD100Res == 1)strReply += GlobalMsg["strCriticalSuccess"];
 			else if (intD100Res == 100 || (intSkillVal < 50 && intD100Res > 95)) strReply += GlobalMsg["strFumble"];
@@ -2033,8 +2066,9 @@ namespace Dice
 			
 			if (!strReason.empty())
 			{
-				strReply = "由于" + strReason + " " + strReply;
+				strReply = "对" + strReason + strReply;
 			}
+			strReply = strNickName + strReply;
 			dice_msg.Reply(strReply);
 		}
 		else if (strLowerMessage[intMsgCnt] == 'r')
@@ -2226,9 +2260,10 @@ namespace Dice
 			}
 			if (!boolDetail && intTurnCnt != 1)
 			{
-				string strAns = strNickName + "骰出了: " + to_string(intTurnCnt) + "次" + rdMainDice.strDice + ": { ";
+				string strAns = "投掷了: " + to_string(intTurnCnt) + "次" + rdMainDice.strDice + ": { ";
 				if (!strReason.empty())
-					strAns.insert(0, "由于" + strReason + " ");
+					strAns.insert(0, "使用" + strReason + "，");
+				strAns.insert(0, strNickName);
 				vector<int> vintExVal;
 				while (intTurnCnt--)
 				{
@@ -2288,16 +2323,23 @@ namespace Dice
 			}
 			else
 			{
-				while (intTurnCnt--)
+				if (intTurnCnt)
 				{
 					// 此处返回值无用
 					// ReSharper disable once CppExpressionWithoutSideEffects
-					rdMainDice.Roll();
-					string strAns = strNickName + "骰出了: " + (boolDetail
-						? rdMainDice.FormCompleteString()
-						: rdMainDice.FormShortString());
+					string strAns = "骰出了: ";
+					while (intTurnCnt--)
+					{
+						rdMainDice.Roll();
+						strAns += (boolDetail
+							? rdMainDice.FormCompleteString()
+							: rdMainDice.FormShortString());
+						if (intTurnCnt)
+							strAns += ", ";
+					}
 					if (!strReason.empty())
-						strAns.insert(0, "由于" + strReason + " ");
+						strAns.insert(0, "使用" + strReason + "，");
+					strAns.insert(0, strNickName);
 					if (!isHidden)
 					{
 						dice_msg.Reply(strAns);

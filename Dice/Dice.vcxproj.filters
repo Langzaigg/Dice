@@ -84,9 +84,6 @@
     <ClCompile Include="MsgFormat.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="DiceUpdate.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="DiceNetwork.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

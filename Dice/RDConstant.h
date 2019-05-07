@@ -50,6 +50,12 @@
 
 typedef int int_errno;
 
+struct RP
+{
+	int RPVal;
+	std::string Date;
+};
+
 static std::map<std::string, std::string> SkillNameReplace = {
 	{"str", "¡¶¡ø"},
 	{"dex", "√ÙΩ›"},
